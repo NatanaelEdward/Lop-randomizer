@@ -1,0 +1,4 @@
+# Distribution binaries kept out of git: they ship as GitHub release assets
+# (GitHub has a 100 MB file-size limit)
+LiesOfPEnemyRandomizer.exe
+*.zip
