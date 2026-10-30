@@ -51,3 +51,47 @@ hook table, 3 bytes total):
    updated helper:        ab46bd4fb1cbef4c33514dacb50018e3b28742d8ec81cf217d20ab83157ba617
    The untouched 1.4.1 original is kept in _backup_original_1_4_1\ inside the
    mod folder (do not copy that folder into the game directory).
+
+10/31/2026 - 1.4.2 (helper DLL rebuilt: version-independent hook anchoring)
+
+The helper DLL was rebuilt from FiendBusa's LOP-RANDO-DLL-HELPER-2025 source
+so it no longer depends on hard-coded game RVAs. It should keep working on
+future game versions without a new patch as long as the hooked code is not
+recompiled into different instructions.
+
+Changes (complete new build of mods\LOP-RANDO-DLL-HELPER.dll; only
+dllmain.cpp changed in the source):
+
+1. At startup (about 5 s after the game loads) the helper scans the running
+   LOP-Win64-Shipping.exe image for the two reference byte patterns and
+   installs the hooks wherever they are found:
+   - 'InjecLvlHelper' chapter-detection hook: 22 bytes matched, 16 stolen
+     43 0F B6 04 0B 45 0F B6 01 4D 8D 49 01 41 3A C0 75 0C 84 C0 75 26
+   - 'InjectNpcStatInfo' NPC stat hook:       28 bytes matched, 21 stolen
+     8B 73 30 44 8B E6 8B 6B 34 44 8B 73 38 44 8B 7B 3C 44 8B 6B 40
+     89 84 24 A0 00 00 00
+   The trailing context bytes (75 0C / 84 C0 / 75 26 and 89 84 24 A0 00 00 00)
+   only anchor the match; they stay in the game, exactly like 1.4.1b.
+2. Everything else is the original approach: FF 25 + absolute-target jump
+   stubs, stolen-byte lengths 16/21, return address = hookAddress + length,
+   chapter detection, map-zone scaling tables, struct offsets (HP +0x30,
+   PhysicalPower +0x34, EnemyType +0x1AC, stats sub-struct +0xF48).
+3. Safety policy: a hook installs only when its pattern matches EXACTLY ONCE
+   in the whole game image. On zero or multiple matches that hook is skipped
+   (fail-open) and the game runs unmodded for that feature; landing on a
+   wrong address is impossible.
+4. New LOP-RANDO-DLL-HELPER.log next to the helper DLL (i.e. in mods\) logs
+   the scan: base address, image size, pattern hit counts, resolved addresses
+   and installed/skipped hooks. If you report an issue, attach that file.
+5. Verified without launching the game (a loader harness against a copy of
+   the v1.14.0.0 LOP-Win64-Shipping.exe): the scanner independently found
+   both targets at exactly the addresses of the 1.4.1b update (0x2136790 /
+   0x1D2D637), stubs installed and pointed back into the helper, and a
+   pattern-miss test confirmed the graceful skip. In-game behavior is
+   expected to be identical to 1.4.1b.
+6. Import/export tables match the shipped helper as closely as possible
+   (the export table is empty, the original had none); built with the zig
+   (clang/mingw) toolchain from the original source plus the scanner. The
+   whole modified source tree is attached to this release as a source zip.
+7. dll hash (SHA256): 023dec3cd31fe399c9cb2999eb372929f5ed03d8503e86f338e137cdc7380b56
+   (size 890880 bytes)
